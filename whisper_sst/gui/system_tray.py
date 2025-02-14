@@ -187,18 +187,47 @@ class SystemTrayApp(QWidget):
             return
 
         try:
-            result = self.model.transcribe(
-                wav_path,
-                language=None if self.selected_language == "auto" else self.selected_language,
-                temperature=0.2,
-                best_of=2,
-                fp16=False
-            )
+            # Skip initial language detection and use direct transcription
+            if self.selected_language == "auto":
+                # Use transcribe with no language specified for auto-detection
+                result = self.model.transcribe(
+                    wav_path,
+                    language=None,  # Let Whisper handle language detection internally
+                    task="transcribe",
+                    temperature=0.2,
+                    best_of=2,
+                    fp16=False
+                )
+                detected_lang = result.get("language", "en")
+                print(f"Detected language: {LANGUAGES.get(detected_lang, detected_lang)}")
+            else:
+                # Use specified language
+                result = self.model.transcribe(
+                    wav_path,
+                    language=self.selected_language,
+                    task="transcribe",
+                    temperature=0.2,
+                    best_of=2,
+                    fp16=False
+                )
+
             text = result["text"].strip().replace('\n', ' ')
             if text:
-                pyautogui.typewrite(text)
+                if self.selected_language == "auto":
+                    self.recording_dialog.update_status(
+                        f"Detected: {LANGUAGES.get(detected_lang, detected_lang)}\n{text[:30]}..."
+                    )
+                
+                pyautogui.typewrite(text + " ")
+            else:
+                print("No text was transcribed")
+                self.recording_dialog.update_status("No speech detected")
+
         except Exception as e:
             self.handle_error(str(e))
+            print(f"Transcription error: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     def toggle_hotkey(self):
         self.hotkey_enabled = not self.hotkey_enabled
